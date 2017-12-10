@@ -265,7 +265,8 @@ struct pb_Field {
         const char *default_value;
         unsigned    enum_value;
     } u;
-    unsigned tag      : 29;
+    unsigned tag      : 28;
+    unsigned required : 1; // required field must be set.
     unsigned repeated : 1;
     unsigned scalar   : 1;
     unsigned packed   : 1;
@@ -439,7 +440,7 @@ PB_API size_t pb_readfixed32(pb_Slice *s, uint32_t *pv) {
 PB_API size_t pb_readfixed64(pb_Slice *s, uint64_t *pv) {
     int i;
     uint64_t n = 0;
-    if (s->p + 8 < s->end)
+    if (s->p + 8 > s->end)
         return 0;
     for (i = 7; i >= 0; --i) {
         n <<= 8;
@@ -612,7 +613,7 @@ PB_API void pb_addvar32(pb_Buffer *b, uint32_t n) {
     } while (n != 0);
 }
 
-PB_API void pb_addfixed64(pb_Buffer *b, uint64_t n) {
+PB_API void pb_addfixed32(pb_Buffer *b, uint32_t n) {
     char *ch = (char*)pb_prepbuffsize(b, 4);
     *ch++ = n & 0xFF; n >>= 8;
     *ch++ = n & 0xFF; n >>= 8;
@@ -621,7 +622,7 @@ PB_API void pb_addfixed64(pb_Buffer *b, uint64_t n) {
     pb_addsize(b, 4);
 }
 
-PB_API void pb_addfixed32(pb_Buffer *b, uint32_t n) {
+PB_API void pb_addfixed64(pb_Buffer *b, uint64_t n) {
     char *ch = (char*)pb_prepbuffsize(b, 8);
     *ch++ = n & 0xFF; n >>= 8;
     *ch++ = n & 0xFF; n >>= 8;
@@ -653,11 +654,11 @@ PB_API int pb_addvalue(pb_Buffer *b, const pb_Value *v, int type) {
         pb_addkey(b, v->tag, PB_T32BIT);
         pb_addfixed32(b, v->u.fixed32);
         return 1;
-    case PB_Tfixed32:
+    case PB_Tfixed32: case PB_Tsfixed32:
         pb_addkey(b, v->tag, PB_T32BIT);
         pb_addfixed32(b, v->u.fixed32);
         return 1;
-    case PB_Tfixed64:
+    case PB_Tfixed64: case PB_Tsfixed64:
         pb_addkey(b, v->tag, PB_T64BIT);
         pb_addfixed64(b, v->u.fixed64);
         return 1;
@@ -1008,8 +1009,8 @@ PB_API int pb_wiretype(int type) {
     case PB_Tsint32:  case PB_Tsint64:  return PB_TVARINT;
     case PB_Tbytes:   case PB_Tstring:
     case PB_Tmessage: case PB_Tgroup:   return PB_TBYTES;
-    case PB_Tfloat:   case PB_Tfixed32: return PB_T32BIT;
-    case PB_Tdouble:  case PB_Tfixed64: return PB_T64BIT;
+    case PB_Tfloat:   case PB_Tfixed32: case PB_Tsfixed32: return PB_T32BIT;
+    case PB_Tdouble:  case PB_Tfixed64: case PB_Tsfixed64: return PB_T64BIT;
     default:                            return -1;
     }
 }
@@ -1280,6 +1281,8 @@ static int pbL_FieldDescriptorProto(pb_State *S, pb_Slice *b, pb_Type *t) {
             DO_(pb_readvar32(b, &number));
             if (number == 3) /* LABEL_OPTIONAL */
                 f.repeated = 1;
+            else if(number == 2)
+                f.required = 1;
             break;
         case pb_(VARINT, 5): /* type */
             DO_(pb_readvar32(b, &number));
