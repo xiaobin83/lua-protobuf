@@ -1,4 +1,4 @@
-#define PB_STATIC_API
+//#define PB_STATIC_API
 #include "pb.h"
 
 #define LUA_LIB
@@ -610,8 +610,9 @@ static int Lpb_decode(lua_State *L) {
     }
     return parse_slice(L, &data, t);
 }
+#include "pb_extends.h"
 
-LUALIB_API int luaopen_pb(lua_State *L) {
+PB_API int luaopen_pb(lua_State *L) {
     luaL_Reg libs[] = {
 #define ENTRY(name) { #name, Lpb_##name }
         ENTRY(clear),
@@ -623,6 +624,7 @@ LUALIB_API int luaopen_pb(lua_State *L) {
         { NULL, NULL }
     };
     luaL_newlib(L, libs);
+    Lpb_registerextens(L);
     return 1;
 }
 
