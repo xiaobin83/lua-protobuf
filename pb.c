@@ -566,14 +566,11 @@ static void on_field(pb_Parser *p, pb_Value *v, pb_Field *f) {
         if (!parse_slice(L, &v->u.data, f->type))
             lua_pushnil(L);
         break;
-    case PB_Tenum: {
-            pb_Field *ev = pb_fieldbytag(f->type, (int)v->u.fixed64);
-            if (ev != NULL) lua_pushstring(L, ev->name);
-            else lua_pushinteger(L, v->u.fixed64);
-        }
+    case PB_Tenum:
+        _push_uint64(L, v->u.fixed64);
         break;
     default:
-        lua_pushinteger(L, v->u.fixed64);
+        _push_uint64(L, v->u.fixed64);
         break;
     }
     if (!f->repeated)

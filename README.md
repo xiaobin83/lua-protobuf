@@ -1,3 +1,12 @@
+**My modifications(by LanhaiYou):**
++ support types: bytes, fixed32, sfixed32, fixed64, sfixed64.
++ support 64bit integer: when integer value big than 2^32, Lua number(double) will loss precision. So, I use string instead of double.
++ support required: required field must be set.
++ fix compile error when use LuaJIT.
++ fix some crash when encode or decode integers.
+
+Folowing is origin documents:
+
 Google protobuf support for Lua
 -------------------------------
 [![Build Status](https://travis-ci.org/starwing/lua-protobuf.svg?branch=master)](https://travis-ci.org/starwing/lua-protobuf)
