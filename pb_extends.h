@@ -55,6 +55,12 @@ static int Ltype_isenum(lua_State *L) {
     return 1;
 }
 
+static int Ltype_ismap(lua_State *L) {
+    pb_Type *t = Lpb_checkutype(L, 1, T_PB_TYPE);
+    lua_pushboolean(L, t->is_map);
+    return 1;
+}
+
 static int Ltype_nfields(lua_State *L) {
     pb_Type *t = Lpb_checkutype(L, 1, T_PB_TYPE);
     lua_pushinteger(L, t->field_names.size);
@@ -124,6 +130,16 @@ static int Lfield_value(lua_State *L) {
     lua_pushinteger(L, f->u.enum_value);
     return 1;
 }
+static int Lfield_isrepeated(lua_State *L) {
+    pb_Field *f = Lpb_checkutype(L, 1, T_PB_FIELD);
+    lua_pushboolean(L, f->repeated);
+    return 1;
+}
+static int Lfield_isrequired(lua_State *L) {
+    pb_Field *f = Lpb_checkutype(L, 1, T_PB_FIELD);
+    lua_pushboolean(L, f->required);
+    return 1;
+}
 
 static void Lpb_registermetatable(lua_State *L, const char *name, luaL_Reg *libs) {
     if (luaL_newmetatable(L, name) == 0)
@@ -149,6 +165,7 @@ static void Lpb_registerextens(lua_State *L) {
         ENTRY(name),
         ENTRY(basename),
         ENTRY(isenum),
+        ENTRY(ismap),
         ENTRY(nfields),
         ENTRY(getfield),
         ENTRY(findfield),
@@ -162,6 +179,8 @@ static void Lpb_registerextens(lua_State *L) {
         ENTRY(type),
         ENTRY(tag),
         ENTRY(value),
+        ENTRY(isrequired),
+        ENTRY(isrepeated),
 #undef  ENTRY
         { NULL, NULL },
     };

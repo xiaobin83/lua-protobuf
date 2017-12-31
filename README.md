@@ -1,9 +1,11 @@
 **My modifications(by LanhaiYou):**
 + support types: bytes, fixed32, sfixed32, fixed64, sfixed64.
 + support 64bit integer: when integer value big than 2^32, Lua number(double) will loss precision. So, I use string instead of double.
-+ support required: required field must be set.
++ support "required": required field must be set.
 + fix compile error when use LuaJIT.
 + fix some crash when encode or decode integers.
++ enum value: use number instead of string.
++ map value: use lua table instead of key-value pair proto.
 
 Folowing is origin documents:
 

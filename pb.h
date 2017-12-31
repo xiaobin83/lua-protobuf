@@ -280,6 +280,7 @@ struct pb_Type {
     pb_Map      field_names;
     unsigned    is_enum  : 1;
     unsigned    is_ext   : 1;
+    unsigned    is_map   : 1;
 };
 
 struct pb_State {
@@ -1322,6 +1323,25 @@ static int pbL_FieldDescriptorProto(pb_State *S, pb_Slice *b, pb_Type *t) {
     return pbL_rawfield(S, t, &f, name);
 }
 
+static int pbL_MessageOption(pb_State *S, pb_Slice *b, pb_Type *t)
+{
+    uint32_t key, number;
+    while (pb_readvar32(b, &key)){
+        switch ((key >> 3) & 7){
+        case 7:
+            DO_(pb_readvar32(b, &number));
+            t->is_map = number;
+            break;
+        default:
+            DO_(pb_skipvalue(b, key));
+            break;
+        }
+    }
+    DO_(b->p == b->end);
+    DO_(t != NULL);
+    return 1;
+}
+
 static int pbL_DescriptorProto(pb_State *S, pb_Slice *b, pb_Slice *prefix) {
     uint32_t key;
     pb_Type t;
@@ -1348,6 +1368,10 @@ static int pbL_DescriptorProto(pb_State *S, pb_Slice *b, pb_Slice *prefix) {
         case pb_(BYTES, 4): /* enum_type */
             DO_(pb_readslice(b, &slice));
             DO_(pbL_EnumDescriptorProto(S, &slice, &name));
+            break;
+        case pb_(BYTES, 7): /* message option*/
+            DO_(pb_readslice(b, &slice));
+            DO_(pbL_MessageOption(S, &slice, &t));
             break;
         default:
             DO_(pb_skipvalue(b, key));

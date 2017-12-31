@@ -466,8 +466,37 @@ static void encode_message(lua_State *L, pb_Buffer *b, pb_Field *f) {
     pb_addbytes(b, s);
 }
 
+static void encode_map(lua_State *L, pb_Buffer *b, pb_Field *f) {
+    pb_Buffer nb;
+    pb_Slice s;
+    pb_Field *fkey, *fval;
+    if (lua_isnil(L, -1)) return;
+    check_type(L, LUA_TTABLE, f);
+
+    fkey = pb_field(f->type, pb_slice("key"));
+    fval = pb_field(f->type, pb_slice("value"));
+
+    lua_pushnil(L);
+    while (lua_next(L, -2)) {
+        lua_pushvalue(L, -2); // duplicate key
+        pb_initbuffer(&nb);
+        encode_field(L, &nb, fkey);
+        lua_pop(L, 1); // pop key
+
+        encode_field(L, &nb, fval);
+        lua_pop(L, 1); // pop value
+
+        s = pb_result(&nb);
+        pb_addkey(b, f->tag, PB_TBYTES);
+        pb_addbytes(b, s);
+    }
+}
+
 static void encode_field(lua_State *L, pb_Buffer *b, pb_Field *f) {
-    if (!f->repeated) {
+    if (f->type && f->type->is_map) {
+        encode_map(L, b, f);
+    }
+    else if (!f->repeated) {
         switch (f->type_id) {
         case PB_Tmessage: encode_message(L, b, f); break;
         case PB_Tenum:    encode_enum(L, b, f); break;
@@ -530,12 +559,16 @@ static int parse_slice(lua_State *L, pb_Slice *slice, pb_Type *t);
 typedef struct Context {
     pb_Parser p;
     lua_State *L;
+    unsigned is_mapentry : 1;
 } Context;
 
 static void on_field(pb_Parser *p, pb_Value *v, pb_Field *f) {
     Context *ctx = (Context*)p;
     lua_State *L = ctx->L;
-    if (!f->repeated)
+    if (ctx->is_mapentry) {
+        /* do nothing*/
+    }
+    else if (!f->repeated)
         lua_pushstring(L, f->name);
     else if (lua53_getfield(L, -1, f->name) == LUA_TNIL) {
         lua_pop(L, 1);
@@ -573,7 +606,16 @@ static void on_field(pb_Parser *p, pb_Value *v, pb_Field *f) {
         _push_uint64(L, v->u.fixed64);
         break;
     }
-    if (!f->repeated)
+
+    if (ctx->is_mapentry) {
+        /* do nothing */
+    }
+    else if (f->type && f->type->is_map) {
+        /* map is a repeated key-value pairs */
+        lua_rawset(L, -3);
+        lua_pop(L, 1);
+    }
+    else if (!f->repeated)
         lua_rawset(L, -3);
     else {
         lua_rawseti(L, -2, lua_rawlen(L, -2) + 1);
@@ -585,16 +627,24 @@ static int parse_slice(lua_State *L, pb_Slice *slice, pb_Type *t) {
     pb_State *S = default_state(L);
     Context ctx;
     luaL_checkstack(L, 3, "proto nest level too big");
-    lua_newtable(L);
     ctx.p.S = S;
     ctx.p.type = t;
     ctx.p.on_field = on_field;
     ctx.p.on_mistype = NULL;
     ctx.p.on_unknown = NULL;
     ctx.L = L;
-    if (pb_parse(&ctx.p, slice))
-        return 1;
-    lua_pop(L, 1);
+    ctx.is_mapentry = 0;
+    if (t->is_map) {
+        ctx.is_mapentry = 1;
+        if (pb_parse(&ctx.p, slice))
+            return 1;
+    }
+    else {
+        lua_newtable(L);
+        if (pb_parse(&ctx.p, slice))
+            return 1;
+        lua_pop(L, 1);
+    }
     return 0;
 }
 
