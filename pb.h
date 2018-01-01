@@ -331,9 +331,10 @@ PB_API pb_Slice pb_lslice(const char *s, size_t len)
 static size_t pb_readvarint_slow(pb_Slice *s, uint64_t *pv) {
     uint64_t n = 0;
     size_t i = 0, count = pb_slicelen(s);
+    uint32_t b;
     while (i != count) {
-        int b = s->p[i] & 0x7F;
-        n |= (uint64_t)b << (7*i);
+        b = s->p[i];
+        n |= (uint64_t)(b & 0x7F) << (7*i);
         ++i;
         if ((b & 0x80) == 0) {
             *pv = n;
