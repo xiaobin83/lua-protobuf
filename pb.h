@@ -503,7 +503,7 @@ PB_API size_t pb_skipvalue(pb_Slice *s, uint32_t key) {
 
 PB_API size_t pb_skipvarint(pb_Slice *s) {
     const char *p = s->p, *op = p;
-    while (p < s->end && !(*p & 0x80)) ++p;
+    while (p < s->end && (*p & 0x80)) ++p;
     if (p >= s->end) return 0;
     s->p = ++p;
     return p - op;
