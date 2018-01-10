@@ -8,3 +8,6 @@
 *.a
 *.so
 *.o
+_build_windows_x86
+_build_windows_x86_64
+
