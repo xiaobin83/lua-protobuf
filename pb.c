@@ -1,4 +1,4 @@
-#define PB_STATIC_API
+//#define PB_STATIC_API
 #include "pb.h"
 
 #define LUA_LIB
@@ -21,12 +21,14 @@
 #if LUA_VERSION_NUM < 502
 #include <assert.h>
 
-# define LUA_OK        0
 # define lua_rawlen    lua_objlen
+#ifndef LUA_JIT
+# define LUA_OK        0
 # define luaL_newlib(L,l) (lua_newtable(L), luaL_register(L,NULL,l))
 # define luaL_setfuncs(L,l,n) (assert(n==0), luaL_register(L,NULL,l))
 # define luaL_setmetatable(L, name) \
     (luaL_getmetatable((L), (name)), lua_setmetatable(L, -2))
+#endif //LUA_JIT
 
 static int relindex(int idx, int offset) {
     if (idx < 0 && idx > LUA_REGISTRYINDEX)
@@ -45,6 +47,7 @@ void lua_rawsetp(lua_State *L, int idx, const void *p) {
     lua_rawset(L, relindex(idx, 1));
 }
 
+#ifndef LUA_JIT
 static lua_Integer lua_tointegerx(lua_State *L, int idx, int *isint) {
     lua_Integer i = lua_tointeger(L, idx);
     if (isint) *isint = (i != 0 || lua_type(L, idx) == LUA_TNUMBER);
@@ -65,6 +68,7 @@ static int luaL_fileresult(lua_State *L, int stat, const char *fname) {
     return 3;
 }
 #endif /* not LuaJIT */
+#endif //#ifndef LUA_JIT
 
 #endif
 
@@ -105,6 +109,142 @@ static lua_Integer posrelat(lua_Integer pos, size_t len) {
     if (pos >= 0) return pos;
     else if (0u - (size_t)pos > len) return 0;
     else return (lua_Integer)len + pos;
+}
+
+static void _push_int64(lua_State *L, int64_t v)
+{
+    char buffer[32];
+    char *p = buffer + 32;
+    uint64_t u;
+    
+    if(v <= (int64_t)0x7fffffff && v >= (int64_t)(int32_t)0x80000000)
+    {
+        lua_pushinteger(L, v);
+        return;
+    }
+    
+    *--p = '\0';
+    u = v > 0 ? v : -v;
+    while(u != 0)
+    {
+        *--p = '0' + u % 10;
+        u /= 10;
+    }
+    if(v < 0)
+    {
+        *--p = '-';
+    }
+    
+    lua_pushstring(L, p);
+}
+
+static void _push_uint64(lua_State *L, uint64_t v)
+{
+    char buffer[32];
+    char *p = buffer + 32;
+    
+    if(v <= (uint64_t)0xffffffff)
+    {
+        lua_pushinteger(L, v);
+        return;
+    }
+    
+    *--p = '\0';
+    while(v != 0)
+    {
+        *--p = '0' + v % 10;
+        v /= 10;
+    }
+
+    lua_pushstring(L, p);
+}
+
+static int64_t _to_int64(lua_State *L, int idx)
+{
+    int type = lua_type(L, idx);
+    if(type == LUA_TNUMBER)
+    {
+        return (int64_t)lua_tointeger(L, idx);
+    }
+    else if(type == LUA_TSTRING)
+    {
+        int64_t v = 0;
+        const char *p = lua_tostring(L, idx);
+        int sign = 1;
+        if(*p == '-')
+        {
+            sign = -1;
+            ++p;
+        }
+        
+        while(*p)
+        {
+            v *= 10;
+            v += *p - '0';
+            ++p;
+        }
+        
+        v *= sign;
+        return v;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
+static uint64_t _to_uint64(lua_State *L, int idx)
+{
+    int type = lua_type(L, idx);
+    if(type == LUA_TNUMBER)
+    {
+        return (uint64_t)lua_tointeger(L, idx);
+    }
+    else if(type == LUA_TSTRING)
+    {
+        uint64_t v = 0;
+        const char *p = lua_tostring(L, idx);
+        int sign = 1;
+        if(*p == '-')
+        {
+            sign = -1;
+            ++p;
+        }
+        
+        while(*p)
+        {
+            v *= 10;
+            v += *p - '0';
+            ++p;
+        }
+        
+        v *= sign;
+        return v;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
+static int64_t _check_int64(lua_State *L, int idx)
+{
+    int type = lua_type(L, idx);
+    if (type != LUA_TNUMBER && type != LUA_TSTRING)
+    {
+        luaL_error(L, "int64 expected, but '%s' was given", lua_typename(L, type));
+    }
+    return _to_int64(L, idx);
+}
+
+static uint64_t _check_uint64(lua_State *L, int idx)
+{
+    int type = lua_type(L, idx);
+    if (type != LUA_TNUMBER && type != LUA_TSTRING)
+    {
+        luaL_error(L, "uint64 expected, but '%s' was given", lua_typename(L, type));
+    }
+    return _to_uint64(L, idx);
 }
 
 static pb_Slice lpb_toslice(lua_State *L, int idx) {
@@ -223,6 +363,28 @@ static void check_type(lua_State *L, int type, pb_Field *f) {
     luaL_argerror(L, 2, lua_tostring(L, -1));
 }
 
+static int64_t check_int64(lua_State *L, pb_Field *f)
+{
+    int type = lua_type(L, -1);
+    if (type != LUA_TNUMBER && type != LUA_TSTRING)
+    {
+        lua_pushfstring(L, "int64 expected at field '%s', %s got", f->name, lua_typename(L, type));
+        luaL_argerror(L, 2, lua_tostring(L, -1));
+    }
+    return _to_int64(L, -1);
+}
+
+static uint64_t check_uint64(lua_State *L, pb_Field *f)
+{
+    int type = lua_type(L, -1);
+    if (type != LUA_TNUMBER && type != LUA_TSTRING)
+    {
+        lua_pushfstring(L, "uint64 expected at field '%s', %s got", f->name, lua_typename(L, type));
+        luaL_argerror(L, 2, lua_tostring(L, -1));
+    }
+    return _to_uint64(L, -1);
+}
+
 static void encode_scalar(lua_State *L, pb_Buffer *b, pb_Field *f) {
     pb_Value v;
     v.tag = f->tag;
@@ -234,15 +396,18 @@ static void encode_scalar(lua_State *L, pb_Buffer *b, pb_Field *f) {
         check_type(L, LUA_TSTRING, f);
         v.u.data = lpb_toslice(L, -1);
         break;
-    case PB_Tfixed32: case PB_Tint32: case PB_Tsint32: case PB_Tuint32:
+    case PB_Tfixed32: case PB_Tsfixed32: case PB_Tint32: case PB_Tsint32: case PB_Tuint32:
         v.u.fixed32 = (uint32_t)check_integer(L, f);
         break;
-    case PB_Tfixed64: case PB_Tint64: case PB_Tsint64: case PB_Tuint64:
-        v.u.fixed64 = (uint64_t)check_integer(L, f);
+    case PB_Tsfixed64: case PB_Tint64: case PB_Tsint64:
+        v.u.sfixed64 = check_int64(L, f);
+        break;
+    case PB_Tfixed64: case PB_Tuint64:
+        v.u.fixed64 = check_uint64(L, f);
         break;
     default:
         lua_pushfstring(L, "unknown type '%s' (%d)",
-                f->type->name, f->type_id);
+                f->name, f->type_id);
         luaL_argerror(L, 2, lua_tostring(L, -1));
     }
     pb_addvalue(b, &v, f->type_id);
@@ -272,16 +437,19 @@ static void encode_enum(lua_State *L, pb_Buffer *b, pb_Field *f) {
     }
 }
 
+// modification: all required field must be set
 static void encode(lua_State *L, pb_Buffer *b, pb_Type *t) {
-    luaL_checkstack(L, 3, "message too many levels");
-    lua_pushnil(L);
-    while (lua_next(L, -2)) {
-        if (lua_type(L, -2) == LUA_TSTRING) {
-            size_t len;
-            const char *s = lua_tolstring(L, -2, &len);
-            pb_Field *f = pb_field(t, pb_lslice(s, len));
-            if (f) encode_field(L, b, f);
-        }
+    size_t i;
+    for(i = 0; i < t->field_names.size; ++i){
+        pb_Entry *e = &t->field_names.hash[i];
+        if(e->key == 0) continue;
+        pb_Field *f = (pb_Field*)e->value;
+        lua_pushstring(L, f->name);
+        lua_rawget(L, -2);
+        if(!lua_isnil(L, -1))
+            encode_field(L, b, f);
+        else if(f->required)
+            luaL_error(L, "Field '%s' is required for type '%s'", f->name, t->name);
         lua_pop(L, 1);
     }
 }
@@ -298,8 +466,37 @@ static void encode_message(lua_State *L, pb_Buffer *b, pb_Field *f) {
     pb_addbytes(b, s);
 }
 
+static void encode_map(lua_State *L, pb_Buffer *b, pb_Field *f) {
+    pb_Buffer nb;
+    pb_Slice s;
+    pb_Field *fkey, *fval;
+    if (lua_isnil(L, -1)) return;
+    check_type(L, LUA_TTABLE, f);
+
+    fkey = pb_field(f->type, pb_slice("key"));
+    fval = pb_field(f->type, pb_slice("value"));
+
+    lua_pushnil(L);
+    while (lua_next(L, -2)) {
+        lua_pushvalue(L, -2); // duplicate key
+        pb_initbuffer(&nb);
+        encode_field(L, &nb, fkey);
+        lua_pop(L, 1); // pop key
+
+        encode_field(L, &nb, fval);
+        lua_pop(L, 1); // pop value
+
+        s = pb_result(&nb);
+        pb_addkey(b, f->tag, PB_TBYTES);
+        pb_addbytes(b, s);
+    }
+}
+
 static void encode_field(lua_State *L, pb_Buffer *b, pb_Field *f) {
-    if (!f->repeated) {
+    if (f->type && f->type->is_map) {
+        encode_map(L, b, f);
+    }
+    else if (!f->repeated) {
         switch (f->type_id) {
         case PB_Tmessage: encode_message(L, b, f); break;
         case PB_Tenum:    encode_enum(L, b, f); break;
@@ -362,12 +559,16 @@ static int parse_slice(lua_State *L, pb_Slice *slice, pb_Type *t);
 typedef struct Context {
     pb_Parser p;
     lua_State *L;
+    unsigned is_mapentry : 1;
 } Context;
 
 static void on_field(pb_Parser *p, pb_Value *v, pb_Field *f) {
     Context *ctx = (Context*)p;
     lua_State *L = ctx->L;
-    if (!f->repeated)
+    if (ctx->is_mapentry) {
+        /* do nothing*/
+    }
+    else if (!f->repeated)
         lua_pushstring(L, f->name);
     else if (lua53_getfield(L, -1, f->name) == LUA_TNIL) {
         lua_pop(L, 1);
@@ -381,27 +582,40 @@ static void on_field(pb_Parser *p, pb_Value *v, pb_Field *f) {
     case PB_Tfloat:  lua_pushnumber(L, v->u.float32); break;
     case PB_Tuint32: case PB_Tfixed32:
         lua_pushinteger(L, v->u.fixed32);
+        break;
+    case PB_Tuint64: case PB_Tfixed64:
+        _push_uint64(L, v->u.fixed64);
+        break;
     case PB_Tint32: case PB_Tsfixed32: case PB_Tsint32:
         lua_pushinteger(L, v->u.sfixed32);
         break;
-    case PB_Tstring:
+    case PB_Tint64: case PB_Tsfixed64: case PB_Tsint64:
+        _push_int64(L, v->u.sfixed64);
+        break;
+    case PB_Tstring: case PB_Tbytes:
         lua_pushlstring(L, v->u.data.p, pb_slicelen(&v->u.data));
         break;
     case PB_Tmessage:
         if (!parse_slice(L, &v->u.data, f->type))
             lua_pushnil(L);
         break;
-    case PB_Tenum: {
-            pb_Field *ev = pb_fieldbytag(f->type, (int)v->u.fixed64);
-            if (ev != NULL) lua_pushstring(L, ev->name);
-            else lua_pushinteger(L, v->u.fixed64);
-        }
+    case PB_Tenum:
+        _push_uint64(L, v->u.fixed64);
         break;
     default:
-        lua_pushinteger(L, v->u.fixed64);
+        _push_uint64(L, v->u.fixed64);
         break;
     }
-    if (!f->repeated)
+
+    if (ctx->is_mapentry) {
+        /* do nothing */
+    }
+    else if (f->type && f->type->is_map) {
+        /* map is a repeated key-value pairs */
+        lua_rawset(L, -3);
+        lua_pop(L, 1);
+    }
+    else if (!f->repeated)
         lua_rawset(L, -3);
     else {
         lua_rawseti(L, -2, lua_rawlen(L, -2) + 1);
@@ -413,16 +627,24 @@ static int parse_slice(lua_State *L, pb_Slice *slice, pb_Type *t) {
     pb_State *S = default_state(L);
     Context ctx;
     luaL_checkstack(L, 3, "proto nest level too big");
-    lua_newtable(L);
     ctx.p.S = S;
     ctx.p.type = t;
     ctx.p.on_field = on_field;
     ctx.p.on_mistype = NULL;
     ctx.p.on_unknown = NULL;
     ctx.L = L;
-    if (pb_parse(&ctx.p, slice))
-        return 1;
-    lua_pop(L, 1);
+    ctx.is_mapentry = 0;
+    if (t->is_map) {
+        ctx.is_mapentry = 1;
+        if (pb_parse(&ctx.p, slice))
+            return 1;
+    }
+    else {
+        lua_newtable(L);
+        if (pb_parse(&ctx.p, slice))
+            return 1;
+        lua_pop(L, 1);
+    }
     return 0;
 }
 
@@ -431,11 +653,16 @@ static int Lpb_decode(lua_State *L) {
     pb_Slice tname = lpb_checkslice(L, 1);
     pb_Slice data = lpb_checkslice(L, 2);
     pb_Type *t = pb_type(S, tname);
-    if (!t) return 0;
+    if (!t){
+        lua_pushnil(L);
+        lua_pushfstring(L, "can not find type '%s'", tname.p);
+        return 2;
+    }
     return parse_slice(L, &data, t);
 }
+#include "pb_extends.h"
 
-LUALIB_API int luaopen_pb(lua_State *L) {
+PB_API int luaopen_pb(lua_State *L) {
     luaL_Reg libs[] = {
 #define ENTRY(name) { #name, Lpb_##name }
         ENTRY(clear),
@@ -447,6 +674,7 @@ LUALIB_API int luaopen_pb(lua_State *L) {
         { NULL, NULL }
     };
     luaL_newlib(L, libs);
+    Lpb_registerextens(L);
     return 1;
 }
 
@@ -475,12 +703,12 @@ static int Lconv_decode_sint32(lua_State *L) {
 }
 
 static int Lconv_encode_sint64(lua_State *L) {
-    lua_pushinteger(L, pb_encode_sint64(luaL_checkinteger(L, 1)));
+    _push_int64(L, pb_encode_sint64(_check_int64(L, 1)));
     return 1;
 }
 
 static int Lconv_decode_sint64(lua_State *L) {
-    lua_pushinteger(L, pb_decode_sint64(luaL_checkinteger(L, 1)));
+    _push_int64(L, pb_decode_sint64(_check_int64(L, 1)));
     return 1;
 }
 
@@ -711,7 +939,7 @@ static int Lbuf_fixed64(lua_State *L) {
     pb_Buffer *buf = check_buffer(L, 1);
     int i, top = lua_gettop(L);
     for (i = 2; i <= top; ++i) {
-        uint64_t n =  (uint64_t)luaL_checkinteger(L, i);
+        uint64_t n = _check_uint64(L, i);
         pb_addfixed64(buf, n);
     }
     return_self(L);
@@ -732,12 +960,17 @@ static int Lbuf_add(lua_State *L) {
     case PB_Tmessage: case PB_Tgroup:
         v.u.data = lpb_checkslice(L, 4);
         break;
-    case PB_Tfixed32: case PB_Tint32: case PB_Tuint32: case PB_Tsint32:
+    case PB_Tfixed32: case PB_Tsfixed32: case PB_Tint32: case PB_Tuint32: case PB_Tsint32:
         v.u.fixed32 = (uint32_t)luaL_checkinteger(L, 4);
         break;
     case PB_Tenum:
-    case PB_Tfixed64: case PB_Tint64: case PB_Tuint64: case PB_Tsint64:
         v.u.fixed64 = (uint64_t)luaL_checkinteger(L, 4);
+        break;
+    case PB_Tsfixed64: case PB_Tint64: case PB_Tsint64:
+        v.u.sfixed64 = _check_uint64(L, 4);
+        break;
+    case PB_Tfixed64: case PB_Tuint64:
+        v.u.fixed64 = _check_uint64(L, 4);
         break;
     default:
         lua_pushfstring(L, "unknown type '%s'", type);
@@ -838,8 +1071,10 @@ static int pb_pushvarint(lua_State *L, pb_Slice *dec, int type) {
     if (!pb_readvarint(dec, &v)) return 0;
     switch (type) {
     case PB_Tint32:
-    case PB_Tint64:
         lua_pushinteger(L, (lua_Integer)(int64_t)v);
+        return 1;
+    case PB_Tint64:
+        _push_int64(L, (int64_t)v);
         return 1;
     case PB_Tuint32:
         lua_pushinteger(L, (uint32_t)v);
@@ -848,10 +1083,12 @@ static int pb_pushvarint(lua_State *L, pb_Slice *dec, int type) {
         lua_pushinteger(L, pb_decode_sint32((uint32_t)v));
         return 1;
     case PB_Tsint64:
-        lua_pushinteger(L, (lua_Integer)pb_decode_sint64(v));
+        _push_int64(L, pb_decode_sint64(v));
+        return 1;
+    case PB_Tuint64:
+        _push_uint64(L, v);
         return 1;
     case 0:
-    case PB_Tuint64:
     case PB_Tenum:
         lua_pushinteger(L, (lua_Integer)v);
         return 1;
@@ -895,10 +1132,10 @@ static int pb_pushfixed64(lua_State *L, pb_Slice *dec, int type) {
         return 1;
     case -1:
     case PB_Tfixed64:
-        lua_pushinteger(L, (lua_Integer)v);
+        _push_uint64(L, v);
         return 1;
     case PB_Tsfixed64:
-        lua_pushinteger(L, (lua_Integer)(int64_t)v);
+        _push_int64(L, (int64_t)v);
         return 1;
     default:
         dec->p = p;
@@ -1062,7 +1299,7 @@ static int Lslice_fixed64(lua_State *L) {
     pb_Slice *dec = check_slice(L, 1);
     uint64_t n = 0;
     if (!pb_readfixed64(dec, &n)) return 0;
-    lua_pushinteger(L, (lua_Integer)n);
+    _push_uint64(L, n);
     return 1;
 }
 
