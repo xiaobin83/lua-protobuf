@@ -12,9 +12,7 @@ link_directories("${CMAKE_SOURCE_DIR}/${LUA_LIB_DIR}")
 
 
 if(BUILD_SHARED_LIBS)
-	if(WIN32)
-		add_definitions(-DPB_IMPLEMENTATION)
-	endif()
+	add_definitions(-DPB_IMPLEMENTATION)
 endif()
 
 add_library(libpb ${SRC})
