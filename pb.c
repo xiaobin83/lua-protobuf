@@ -4,6 +4,7 @@
 #define LUA_LIB
 #include <lua.h>
 #include <lauxlib.h>
+#include <string.h>
 
 
 /* Lua utils */
