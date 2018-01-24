@@ -10,18 +10,13 @@ set(SRC "pb.c")
 include_directories("${CMAKE_SOURCE_DIR}/prebuilt/lua-5.3/include" "${CMAKE_SOURCE_DIR}/${LUA_LIB_DIR}")
 link_directories("${CMAKE_SOURCE_DIR}/${LUA_LIB_DIR}")
 
-
-if(BUILD_SHARED_LIBS)
-	add_definitions(-DPB_IMPLEMENTATION)
-endif()
-
+add_definitions(-DPB_STATIC_API)
 
 add_library(libpb ${SRC})
 target_link_libraries(libpb lua)
 set_target_properties(libpb PROPERTIES OUTPUT_NAME pb CLEAN_DIRECT_OUTPUT 1 )
 
 if(IPHONEOS_DEPLOYMENT_TARGET)
-	add_definitions(-DPB_STATIC_API)
 	set_xcode_property(libpb IPHONEOS_DEPLOYMENT_TARGET ${IPHONEOS_DEPLOYMENT_TARGET})
 endif()
 
