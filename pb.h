@@ -33,10 +33,15 @@
 # else
 #  define PB_API __declspec(dllimport)
 # endif
+# define PB_LIB_API __declspec(dllexport)
 #endif
 
 #ifndef PB_API
 # define PB_API extern
+#endif
+
+#ifndef PB_LIB_API
+# define PB_LIB_API extern
 #endif
 
 #if defined(_MSC_VER) || defined(__UNIXOS2__) || defined(__SOL64__)

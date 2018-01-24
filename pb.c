@@ -663,7 +663,7 @@ static int Lpb_decode(lua_State *L) {
 }
 #include "pb_extends.h"
 
-PB_API int luaopen_pb(lua_State *L) {
+PB_LIB_API int luaopen_pb(lua_State *L) {
     luaL_Reg libs[] = {
 #define ENTRY(name) { #name, Lpb_##name }
         ENTRY(clear),

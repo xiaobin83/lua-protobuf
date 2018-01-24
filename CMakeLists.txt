@@ -15,11 +15,13 @@ if(BUILD_SHARED_LIBS)
 	add_definitions(-DPB_IMPLEMENTATION)
 endif()
 
+
 add_library(libpb ${SRC})
 target_link_libraries(libpb lua)
 set_target_properties(libpb PROPERTIES OUTPUT_NAME pb CLEAN_DIRECT_OUTPUT 1 )
 
 if(IPHONEOS_DEPLOYMENT_TARGET)
+	add_definitions(-DPB_STATIC_API)
 	set_xcode_property(libpb IPHONEOS_DEPLOYMENT_TARGET ${IPHONEOS_DEPLOYMENT_TARGET})
 endif()
 
