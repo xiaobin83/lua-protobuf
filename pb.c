@@ -114,6 +114,9 @@ static lua_Integer posrelat(lua_Integer pos, size_t len) {
 
 static void _push_int64(lua_State *L, int64_t v)
 {
+#if LUA_INT_TYPE == LUA_INT_LONGLONG
+	lua_pushinteger(L, v);
+#else
     char buffer[32];
     char *p = buffer + 32;
     uint64_t u;
@@ -137,10 +140,14 @@ static void _push_int64(lua_State *L, int64_t v)
     }
     
     lua_pushstring(L, p);
+#endif
 }
 
 static void _push_uint64(lua_State *L, uint64_t v)
 {
+#if LUA_INT_TYPE == LUA_INT_LONGLONG
+	lua_pushinteger(L, v);
+#else
     char buffer[32];
     char *p = buffer + 32;
     
@@ -158,6 +165,7 @@ static void _push_uint64(lua_State *L, uint64_t v)
     }
 
     lua_pushstring(L, p);
+#endif
 }
 
 static int64_t _to_int64(lua_State *L, int idx)
