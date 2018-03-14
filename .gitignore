@@ -1,13 +1,3 @@
-*.exe
-*.dll
-*.ilk
-*.exp
-*.lib
-*.obj
-*.pdb
-*.a
-*.so
-*.o
 _build_*
 .DS_Store
 
