@@ -4,3 +4,6 @@
 [submodule "cmake/ios"]
 	path = cmake/ios
 	url = https://github.com/xiaobin83/ios-cmake.git
+[submodule "lua-prebuilt"]
+	path = lua-prebuilt
+	url = https://github.com/xiaobin83/lua-prebuilt
