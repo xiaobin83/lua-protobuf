@@ -7,7 +7,7 @@ option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 set(SRC "pb.c")
 
 # find lua
-include_directories("${CMAKE_SOURCE_DIR}/prebuilt/lua-5.3/include" "${CMAKE_SOURCE_DIR}/${LUA_LIB_DIR}")
+include_directories("${CMAKE_SOURCE_DIR}/lua-prebuilt/lua-5.3/include" "${CMAKE_SOURCE_DIR}/${LUA_LIB_DIR}")
 link_directories("${CMAKE_SOURCE_DIR}/${LUA_LIB_DIR}")
 
 add_definitions(-DPB_STATIC_API)
@@ -23,11 +23,5 @@ endif()
 # install
 set(LUA_VDIR "5.3")
 install(TARGETS libpb DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/lua/${LUA_VDIR})
-
-
-
-
-
-
 
 
