@@ -11,6 +11,9 @@ include_directories("${CMAKE_SOURCE_DIR}/lua-prebuilt/lua-5.3/include" "${CMAKE_
 link_directories("${CMAKE_SOURCE_DIR}/${LUA_LIB_DIR}")
 
 add_definitions(-DPB_STATIC_API)
+if(WIN32)
+	add_definitions(-DLUA_BUILD_AS_DLL -DLUA_LIB)
+endif()
 
 add_library(libpb ${SRC})
 target_link_libraries(libpb lua)

@@ -39,14 +39,6 @@
 # define PB_API extern
 #endif
 
-#ifndef PB_LIB_API
-# ifdef _WIN32
-#   define PB_LIB_API __declspec(dllexport)
-# else
-#   define PB_LIB_API extern
-# endif
-#endif
-
 #if defined(_MSC_VER) || defined(__UNIXOS2__) || defined(__SOL64__)
 typedef unsigned char      uint8_t;
 typedef signed   char       int8_t;
